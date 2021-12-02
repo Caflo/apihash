@@ -77,7 +77,7 @@ def enc(dll_name, api_name):
 
 def get_exports_from_dll_dir():
     result = dict()
-    for file in glob.glob(r"C:\Windows\System32\ws2*.dll"):
+    for file in glob.glob(r"C:\Windows\System32\*.dll"):
         result[file] = list()
         pe = pefile.PE(file)
         print(f"Searching exports in: {file}...")
@@ -99,8 +99,8 @@ def dec(hash, exe_path):
                 print(f"API Found: {hash} => {api_name} ({dll_name})")
                 return
 
-    print(f"No API found with hash {hash} in the given executable.")
-    print(f"Trying to search hash on C:\\Windows\\System32\\ ...")
+    print(f"No API found with hash {hash} in the given executabl")
+    print(f"Trying to search hash on C:\\Windows\\System32. This may take a while.")
 
     exports = get_exports_from_dll_dir()
 
