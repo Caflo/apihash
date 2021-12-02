@@ -1,21 +1,7 @@
 import sys
-import psutil, os
-import subprocess
+import os
 import pefile
 import glob
-
-def list_dll():
-    p = psutil.Process( os.getpid() )
-    for dll in p.memory_maps():
-        print(dll.path)
-
-def dumpbin_list_dll():
-    subprocess.call(r"C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\VC\Tools\MSVC\14.27.29110\bin\Hostx64\x64\dumpbin.exe")
-
-def list_dll_from_file():
-    pe = pefile.PE(r"C:\Users\HP\Downloads\npcap-1.55.exe")
-    for exp in pe.DIRECTORY_ENTRY_EXPORT.symbols:
-        print(exp.name)
 
 def get_exports(exe_path=None):
     result = dict()
@@ -43,13 +29,12 @@ def ror(n, rotations=1, width=8):
     n &= mask
     return (n >> rotations) | ((n << (8 * width - rotations)) & mask)  
 
-def hash(string, dll=False):
+def hash(string):
     result = 0x0
     bits = 13
     size = 4
 
     for c in string:
-        c_hex = hex(c)
         result = ror(result, bits, size)
         result += c
 
