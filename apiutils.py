@@ -43,7 +43,7 @@ def hash(string):
         result = ror(result, bits, size)
         result += c
 
-    result = ror(result, 13, 4) # terminator
+    result = ror(result, bits, size) # terminator
     return result
 
 def enc(dll_name, api_name):

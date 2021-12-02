@@ -38,7 +38,7 @@ if __name__ == "__main__":
         print(f"Hash of API: {result['api_hash']}")
         print(f"Hash: {result['hash']}")
     elif args.cmd == 'dec':
-        hash = args.hash
+        hash = hex(int(args.hash, base=16) & 0xFFFFFFFF) # hash is 8 byte size, removing eccessive digits
         exe_path = args.path
         start = time.time()
         apiutils.dec(hash, exe_path=exe_path)
