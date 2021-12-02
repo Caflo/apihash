@@ -2,6 +2,13 @@ import sys
 import os
 import pefile
 import glob
+import threading
+import concurrent.futures
+import multiprocessing
+import time
+import collections
+
+MAX_WORKERS = multiprocessing.cpu_count()
 
 def get_exports(exe_path=None):
     result = dict()
@@ -50,7 +57,7 @@ def enc(dll_name, api_name):
     dll_name_utf16.append(0x00)
     api_name_utf8 = bytearray(api_name, encoding="utf-8")
 
-    dll_hash = hash(dll_name_utf16, dll=True)
+    dll_hash = hash(dll_name_utf16)
     api_hash = hash(api_name_utf8)
     tot_hash = (dll_hash + api_hash) & 0xFFFFFFFF
 
@@ -60,7 +67,7 @@ def enc(dll_name, api_name):
 
     return result
 
-def get_exports_from_dll_dir():
+def get_exports_from_dll_dir(start=None, end=None):
     result = dict()
     for file in glob.glob(r"C:\Windows\System32\*.dll"):
         result[file] = list()
@@ -74,26 +81,76 @@ def get_exports_from_dll_dir():
                 result[file].append(exp.name.decode('utf-8'))
     return result
 
-def dec(hash, exe_path):
-    exports = get_exports(exe_path=exe_path)
+def search_api(files):
+    result = dict()
+    count = 0
+    for file in files:
+        result[file] = list()
+        pe = pefile.PE(file)
+        thread_no = threading.current_thread().ident 
+        print(f"[PROCESS {thread_no}] Searching exports in: {file}...")
+        if hasattr(pe, 'DIRECTORY_ENTRY_EXPORT'):
+            for exp in pe.DIRECTORY_ENTRY_EXPORT.symbols:
+                if exp.name is None:
+                    continue # skip None exports
+    #                print(exp.name.decode('utf-8'))
+                result[file].append(exp.name.decode('utf-8'))
+        count += 1
 
-    for dll_name in exports:
-        for api_name in exports[dll_name]:
-            result = enc(dll_name=os.path.basename(dll_name), api_name=api_name)
+    print(f"[PROCESS {thread_no}] FINISHED. Files searched: {count}")
+    return result
+
+
+def get_dlls(start=None, end=None):
+    files = [file for file in glob.glob(r"C:\Windows\System32\*.dll")]
+    step = round(len(files) / MAX_WORKERS)
+    print(len(files))
+    print(step)
+
+    start = 0
+    end = len(files)
+
+    futures = set()
+    result = []
+    with concurrent.futures.ProcessPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        for i in range(start, end, step):
+            print(f"Start: {i}, End: {i+step-1}")
+            assigned_files = files[i:i+step-1]
+            future = executor.submit(search_api, assigned_files)
+            futures.add(future)
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                data = future.result()
+                result.append(data)
+            except Exception as exc:
+                print('Generated an exception: %s' % (exc))
+    return result
+
+def dec(hash, exe_path):
+    exports = get_exports(exe_path)
+    for dll_path in exports:
+        for api_name in exports[dll_path]:
+            result = enc(dll_name=os.path.basename(dll_path), api_name=api_name)
             if result['hash'].lower() == hash.lower():
-                print(f"API Found: {hash} => {api_name} ({dll_name})")
+                print(f"API Found: {hash} => {api_name} ({dll_path})")
                 return
 
-    print(f"No API found with hash {hash} in the given executabl")
+    print(f"No API found with hash {hash} in the given executable.")
     print(f"Trying to search hash on C:\\Windows\\System32. This may take a while.")
 
-    exports = get_exports_from_dll_dir()
 
-    for dll_name in exports:
-        for api_name in exports[dll_name]:
-            result = enc(dll_name=os.path.basename(dll_name), api_name=api_name)
+    results = get_dlls()
+    exports = {}
+    exports = collections.defaultdict(list)
+    for d in results:
+        for k, v in d.items():  
+            exports[k].append(v) 
+
+    for dll_path in exports:
+        for api_name in exports[dll_path][0]:
+            result = enc(dll_name=os.path.basename(dll_path), api_name=api_name)
             if result['hash'].lower() == hash.lower():
-                print(f"API Found: {hash} => {api_name} ({dll_name})")
+                print(f"API Found: {hash} => {api_name} ({dll_path})")
                 return
 
     print(f"No API found with hash {hash}.")
@@ -111,7 +168,10 @@ if __name__ == "__main__":
     elif op == 'dec':
         h = sys.argv[2]
         exe_path = sys.argv[3]
+        start = time.time()
         dec(h, exe_path)
+        end = time.time()
+        print(f"Elapsed time: {end - start} seconds")
     elif op == 'list-dll':
         result = get_exports()
         print(result.keys())
